@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Routine {
+  id          String      @id @default(cuid())
+  name        String
+  label       String      // "A" | "B"
+  dayOfWeek   String      // "LUNES", "MARTES", etc.
+  color       String      // hex or tailwind color name
+  description String?
+  exercises   Exercise[]
+  workouts    Workout[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("routines")
+}
+
+model Exercise {
+  id              String          @id @default(cuid())
+  routineId       String
+  routine         Routine         @relation(fields: [routineId], references: [id])
+  name            String
+  sets            Int
+  repsOrTime      String          // "Al fallo", "4 reps", "90 seg", etc.
+  weight          String?         // "20 lb", "10 lb", etc.
+  notes           String?         // Drop sets, pauses, etc.
+  isSuperset      Boolean         @default(false)
+  supersetGroup   String?         // group identifier for supersets
+  order           Int
+  videoUrl        String?         // YouTube embed URL
+  logs            ExerciseLog[]
+  createdAt       DateTime        @default(now())
+
+  @@map("exercises")
+}
+
+model Workout {
+  id           String        @id @default(cuid())
+  routineId    String
+  routine      Routine       @relation(fields: [routineId], references: [id])
+  date         DateTime      @db.Date
+  completed    Boolean       @default(false)
+  notes        String?
+  exerciseLogs ExerciseLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([routineId, date])
+  @@map("workouts")
+}
+
+model ExerciseLog {
+  id          String   @id @default(cuid())
+  workoutId   String
+  workout     Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id])
+  done        Boolean  @default(false)
+  setsCompleted Int?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workoutId, exerciseId])
+  @@map("exercise_logs")
+}
