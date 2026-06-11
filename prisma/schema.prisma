@@ -36,6 +36,7 @@ model Exercise {
   order           Int
   videoUrl        String?         // YouTube embed URL
   logs            ExerciseLog[]
+  prs             PersonalRecord[]
   createdAt       DateTime        @default(now())
 
   @@map("exercises")
@@ -48,6 +49,7 @@ model Workout {
   date         DateTime      @db.Date
   completed    Boolean       @default(false)
   notes        String?
+  durationSeconds Int?       // total duration of workout
   exerciseLogs ExerciseLog[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -65,9 +67,36 @@ model ExerciseLog {
   done        Boolean  @default(false)
   setsCompleted Int?
   notes       String?
+  setLogs     SetLog[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([workoutId, exerciseId])
   @@map("exercise_logs")
+}
+
+model SetLog {
+  id            String      @id @default(cuid())
+  exerciseLogId String
+  exerciseLog   ExerciseLog @relation(fields: [exerciseLogId], references: [id], onDelete: Cascade)
+  setNumber     Int
+  weight        String?     // actual weight used, e.g. "20 lb"
+  reps          Int?        // actual reps performed
+  completed     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("set_logs")
+}
+
+model PersonalRecord {
+  id          String   @id @default(cuid())
+  exerciseId  String
+  exercise    Exercise @relation(fields: [exerciseId], references: [id])
+  weight      String   // e.g. "20 lb"
+  reps        Int
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now())
+
+  @@map("personal_records")
 }

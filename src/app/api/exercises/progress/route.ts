@@ -3,31 +3,31 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
 const querySchema = z.object({
-  label: z.string().optional(),
+  exerciseId: z.string().cuid(),
 })
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const parsed = querySchema.parse({
-      label: searchParams.get('label') || undefined,
+      exerciseId: searchParams.get('exerciseId'),
     })
 
-    const routines = await prisma.routine.findMany({
-      where: parsed.label ? { label: parsed.label } : undefined,
+    const logs = await prisma.exerciseLog.findMany({
+      where: { exerciseId: parsed.exerciseId },
       include: {
-        exercises: {
-          orderBy: { order: 'asc' },
-        },
+        workout: true,
+        setLogs: true,
       },
-      orderBy: [{ label: 'asc' }],
+      orderBy: { workout: { date: 'desc' } },
     })
 
-    return NextResponse.json(routines)
+    return NextResponse.json(logs)
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 })
     }
-    return NextResponse.json({ error: 'Failed to fetch routines' }, { status: 500 })
+    console.error(error)
+    return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 })
   }
 }

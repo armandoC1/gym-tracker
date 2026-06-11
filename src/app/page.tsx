@@ -1,34 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { format, startOfWeek, addDays, isToday, isSameDay } from 'date-fns'
+import { format, startOfWeek, addDays, isSameDay, subWeeks, isAfter, isBefore } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useQuery } from '@tanstack/react-query'
+import { Routine, Workout } from '@prisma/client'
 
-interface Routine {
-  id: string
-  name: string
-  label: string
-  dayOfWeek: string
-  color: string
-  description: string
-  exercises: Exercise[]
+interface RoutineWithExercises extends Routine {
+  exercises: { id: string; name: string; sets: number; repsOrTime: string; weight?: string; notes?: string }[]
 }
 
-interface Exercise {
-  id: string
-  name: string
-  sets: number
-  repsOrTime: string
-  weight?: string
-  notes?: string
-}
-
-interface Workout {
-  id: string
-  routineId: string
-  date: string
-  completed: boolean
+interface WorkoutWithRoutine extends Workout {
   routine: { name: string; label: string; color: string; dayOfWeek: string }
 }
 
@@ -52,43 +35,81 @@ const DAY_LABELS: Record<string, string> = {
   DOMINGO: 'Dom',
 }
 
+function useRoutines() {
+  return useQuery<RoutineWithExercises[]>({
+    queryKey: ['routines'],
+    queryFn: async () => {
+      const res = await fetch('/api/routines')
+      if (!res.ok) throw new Error('Error fetching routines')
+      return res.json()
+    },
+  })
+}
+
+function useWorkouts() {
+  return useQuery<WorkoutWithRoutine[]>({
+    queryKey: ['workouts'],
+    queryFn: async () => {
+      const res = await fetch('/api/workouts')
+      if (!res.ok) throw new Error('Error fetching workouts')
+      return res.json()
+    },
+  })
+}
+
+function calculateStreak(workouts: WorkoutWithRoutine[]) {
+  if (workouts.length === 0) return 0
+  const completed = workouts.filter((w) => w.completed)
+  if (completed.length === 0) return 0
+
+  const weeks = new Set<string>()
+  completed.forEach((w) => {
+    const week = format(startOfWeek(new Date(w.date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    weeks.add(week)
+  })
+
+  const sortedWeeks = Array.from(weeks).sort((a, b) => b.localeCompare(a))
+  let streak = 0
+  const today = new Date()
+  const thisWeekStart = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+
+  let checkWeek = thisWeekStart
+  for (const week of sortedWeeks) {
+    if (week === checkWeek) {
+      streak++
+      checkWeek = format(subWeeks(new Date(checkWeek + 'T12:00:00'), 1), 'yyyy-MM-dd')
+    } else {
+      break
+    }
+  }
+  return streak
+}
+
 export default function Home() {
-  const [routines, setRoutines] = useState<Routine[]>([])
-  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const { data: routines, isLoading: routinesLoading } = useRoutines()
+  const { data: workouts, isLoading: workoutsLoading } = useWorkouts()
   const [activeTab, setActiveTab] = useState<'A' | 'B'>('A')
-  const [loading, setLoading] = useState(true)
   const today = new Date()
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/routines').then((r) => r.json()),
-      fetch('/api/workouts').then((r) => r.json()),
-    ]).then(([r, w]) => {
-      setRoutines(r)
-      setWorkouts(w)
-      setLoading(false)
-    })
-  }, [])
+  const loading = routinesLoading || workoutsLoading
 
-  const filteredRoutines = routines.filter((r) => r.label === activeTab)
+  const filteredRoutines = (routines || []).filter((r) => r.label === activeTab)
 
   const getWorkoutForRoutineToday = (routineId: string) => {
-    return workouts.find(
-      (w) =>
-        w.routineId === routineId &&
-        isSameDay(new Date(w.date), today)
+    return (workouts || []).find(
+      (w) => w.routineId === routineId && isSameDay(new Date(w.date), today)
     )
   }
 
-  const recentWorkouts = workouts.slice(0, 14)
+  const recentWorkouts = (workouts || []).slice(0, 14)
 
-  // Stats
   const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 })
-  const thisWeekWorkouts = workouts.filter((w) => {
+  const thisWeekWorkouts = (workouts || []).filter((w) => {
     const d = new Date(w.date)
     return d >= thisWeekStart && w.completed
   })
-  const totalCompleted = workouts.filter((w) => w.completed).length
+  const totalCompleted = (workouts || []).filter((w) => w.completed).length
+  const streak = calculateStreak(workouts || [])
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
@@ -111,6 +132,11 @@ export default function Home() {
             <div>
               <div className="text-2xl font-black text-white">{totalCompleted}</div>
               <div className="text-[10px] text-white/40 uppercase tracking-widest">Total</div>
+            </div>
+            <div className="w-px bg-white/10" />
+            <div>
+              <div className="text-2xl font-black text-yellow-400">{streak}</div>
+              <div className="text-[10px] text-white/40 uppercase tracking-widest">Semanas</div>
             </div>
           </div>
         </div>
@@ -149,8 +175,7 @@ export default function Home() {
             <div className="space-y-3">
               {filteredRoutines.map((routine) => {
                 const workout = getWorkoutForRoutineToday(routine.id)
-                const isToday_ =
-                  DAY_MAP[routine.dayOfWeek] === today.getDay()
+                const isToday_ = DAY_MAP[routine.dayOfWeek] === today.getDay()
 
                 return (
                   <Link
@@ -163,7 +188,6 @@ export default function Home() {
                     }`}
                   >
                     <div className="p-5 flex items-center gap-4">
-                      {/* Day indicator */}
                       <div
                         className="w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0"
                         style={{ backgroundColor: routine.color + '33', color: routine.color }}
@@ -186,7 +210,6 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Status */}
                       <div className="flex-shrink-0">
                         {workout?.completed ? (
                           <div className="w-8 h-8 rounded-full bg-green-500/20 border border-green-500/50 flex items-center justify-center">

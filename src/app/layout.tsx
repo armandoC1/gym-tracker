@@ -1,11 +1,16 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import { Providers } from '@/components/Providers'
+import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
   title: 'GymTracker – Heavy Duty',
   description: 'Tracker de rutinas Heavy Duty Enfoque Brazos',
-  themeColor: '#0a0a0f',
   manifest: '/manifest.json',
+}
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a0f',
 }
 
 export default function RootLayout({
@@ -24,7 +29,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <Providers>
+          {children}
+          <Toaster position="bottom-center" toastOptions={{ style: { background: '#111', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' } }} />
+        </Providers>
+      </body>
     </html>
   )
 }
